@@ -55,12 +55,6 @@ def hitung_sintaksis(jawaban_siswa, jawaban_benar):
         return 1.0
     return 1.0 - (jarak / max_len)
 
-# Routing halaman siswa
-@app.route("/")
-def siswa():
-    soal = Soal.query.all()
-    return render_template("siswa.html", soal=soal)
-
 # Proses submit jawaban
 @app.route("/submit", methods=["POST"])
 def submit():
@@ -89,4 +83,4 @@ def submit():
     return f"Selamat {nama_siswa}, nilai kamu: {hasil_nilai / len(Soal.query.all()):.2f}"
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=8080)
