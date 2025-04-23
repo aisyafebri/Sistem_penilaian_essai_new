@@ -68,6 +68,39 @@
             background-color: #dc3545;
             color: white;
         }
+        .progress {
+            border-radius: 20px;
+            background-color: #f0f0f0;
+        }
+        .progress-bar {
+            border-radius: 20px;
+            text-align: center;
+            line-height: 25px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+        }
+        .card-body .table td {
+            padding: 1rem;
+        }
+        .collapse {
+            transition: all 0.3s ease;
+        }
+        .card-body .bg-light {
+            background-color: #f8f9fa !important;
+            border: 1px solid #e9ecef;
+        }
+        .table-hover tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            text-align: center;
+            min-width: 100px;
+        }
     </style>
 </head>
 <body>
@@ -182,7 +215,7 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <button class="btn btn-sm btn-primary" onclick="showDetailJawaban('{{ user.username }}')">
+                                            <button class="btn btn-sm btn-primary" onclick="filterByStudent('{{ user.username }}')">
                                                 <i class='bx bx-detail'></i> Detail
                                             </button>
                                         </td>
@@ -197,29 +230,84 @@
             <!-- Detail Jawaban Siswa -->
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title mb-4">Detail Jawaban Siswa</h5>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="card-title mb-0">Detail Jawaban Siswa</h5>
+                        <button class="btn btn-outline-primary" onclick="showAllAnswers()">
+                            <i class='bx bx-show-alt'></i> Tampilkan Semua
+                        </button>
+                    </div>
                     <div class="table-responsive">
-                        <table id="hasilTable" class="table table-striped">
-                            <thead>
+                        <table id="hasilTable" class="table table-hover">
+                            <thead class="table-primary">
                                 <tr>
-                                    <th>Nama Siswa</th>
-                                    <th>Soal</th>
-                                    <th>Jawaban</th>
-                                    <th>Skor Semantik</th>
-                                    <th>Skor Sintaksis</th>
-                                    <th>Skor Akhir</th>
-                                    <th>Status</th>
+                                    <th style="width: 15%">Nama Siswa</th>
+                                    <th style="width: 25%">Soal & Jawaban</th>
+                                    <th style="width: 15%">Skor Semantik</th>
+                                    <th style="width: 15%">Skor Sintaksis</th>
+                                    <th style="width: 15%">Skor Akhir</th>
+                                    <th style="width: 15%">Status</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for j in jawaban %}
-                                <tr>
-                                    <td>{{ j.user.username }}</td>
-                                    <td>{{ j.soal.pertanyaan[:50] }}...</td>
-                                    <td>{{ j.jawaban_siswa[:50] }}...</td>
-                                    <td>{{ "%.2f"|format(j.skor_semantik) }}</td>
-                                    <td>{{ "%.2f"|format(j.skor_sintaksis) }}</td>
-                                    <td>{{ "%.2f"|format(j.skor_akhir) }}</td>
+                                <tr class="align-middle answer-row" data-student="{{ j.user.username }}">
+                                    <td class="fw-bold">{{ j.user.username }}</td>
+                                    <td>
+                                        <div class="d-grid">
+                                            <button class="btn btn-link text-decoration-none p-0 text-start" type="button" 
+                                                    data-bs-toggle="collapse" 
+                                                    data-bs-target="#detail{{ j.id }}" 
+                                                    aria-expanded="false">
+                                                <small class="text-muted">Klik untuk detail</small>
+                                            </button>
+                                        </div>
+                                        <div class="collapse mt-2" id="detail{{ j.id }}">
+                                            <div class="card card-body bg-light">
+                                                <div class="mb-3">
+                                                    <label class="fw-bold text-primary">Pertanyaan:</label>
+                                                    <p class="mb-2">{{ j.soal.pertanyaan }}</p>
+                                                </div>
+                                                <div>
+                                                    <label class="fw-bold text-success">Jawaban Siswa:</label>
+                                                    <p class="mb-0">{{ j.jawaban_siswa }}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 25px">
+                                            <div class="progress-bar bg-info" role="progressbar" 
+                                                style="width: {{ j.skor_semantik }}%" 
+                                                aria-valuenow="{{ j.skor_semantik }}" 
+                                                aria-valuemin="0" 
+                                                aria-valuemax="100">
+                                                {{ "%.1f"|format(j.skor_semantik) }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 25px">
+                                            <div class="progress-bar bg-warning" role="progressbar" 
+                                                style="width: {{ j.skor_sintaksis }}%" 
+                                                aria-valuenow="{{ j.skor_sintaksis }}" 
+                                                aria-valuemin="0" 
+                                                aria-valuemax="100">
+                                                {{ "%.1f"|format(j.skor_sintaksis) }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 25px">
+                                            <div class="progress-bar {{ 'bg-success' if j.skor_akhir >= 75 else 'bg-danger' }}" 
+                                                role="progressbar" 
+                                                style="width: {{ j.skor_akhir }}%" 
+                                                aria-valuenow="{{ j.skor_akhir }}" 
+                                                aria-valuemin="0" 
+                                                aria-valuemax="100">
+                                                {{ "%.1f"|format(j.skor_akhir) }}%
+                                            </div>
+                                        </div>
+                                    </td>
                                     <td>
                                         <span class="status-badge {{ 'status-lulus' if j.status_akhir == 'Lulus' else 'status-tidak-lulus' }}">
                                             {{ j.status_akhir }}
@@ -241,7 +329,7 @@
     <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
     <script>
         $(document).ready(function() {
-            // Initialize DataTable for student summary only
+            // Initialize DataTable for student summary
             $('#nilaiSiswaTable').DataTable({
                 pageLength: 10,
                 order: [[2, 'desc']],
@@ -250,9 +338,20 @@
                 }
             });
 
-            // Regular table for detailed answers
-            $('#hasilTable').addClass('table-bordered');
+            // Initially show all answers
+            showAllAnswers();
         });
+
+        function filterByStudent(username) {
+            $('.answer-row').hide();
+            $('.answer-row[data-student="' + username + '"]').show();
+            // Scroll to answers section
+            document.querySelector('#hasilTable').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function showAllAnswers() {
+            $('.answer-row').show();
+        }
     </script>
 </body>
 </html>

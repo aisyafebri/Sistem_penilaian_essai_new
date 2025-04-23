@@ -195,12 +195,13 @@
                             <div class="card-body">
                                 <p class="card-text" style="font-size: 16px;">{{ s.pertanyaan }}</p>
                                 <textarea 
-                                    name="jawaban_{{ s.id }}" 
-                                    class="form-control mt-3" 
-                                    rows="8" 
+                                    class="form-control mt-3"
+                                    name="jawaban_{{ s.id }}"
+                                    rows="8"
                                     placeholder="Tulis jawaban Anda di sini..."
                                     oninput="markAnswered({{loop.index}})"
-                                    required></textarea>
+                                    required
+                                ></textarea>
                             </div>
                         </div>
 
@@ -223,6 +224,16 @@
                             </button>
                             {% endif %}
                         </div>
+
+                        <!-- Navigation buttons -->
+                        <button 
+                            type="button"
+                            class="nav-btn {% if loop.index == 1 %}active{% endif %}"
+                            id="nav-{{loop.index}}"
+                            onclick="showQuestion({{loop.index}})"
+                        >
+                            {{loop.index}}
+                        </button>
                     </div>
                     {% endfor %}
                 </form>
@@ -276,9 +287,9 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let currentQuestion = 1;
-        let totalQuestions = {{ soal|length if not show_result else 0 }};
-        let answeredQuestions = new Set();
+        const currentQuestion = 1;
+        const totalQuestions = {{ soal|length if not show_result else 0 }};
+        const answeredQuestions = new Set();
         let submitModal;
 
         function showQuestion(num) {
