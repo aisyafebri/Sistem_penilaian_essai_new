@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Penilaian Esai - CBT</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/boxicons@2.0.7/css/boxicons.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .header-info {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 15px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-info i {
+            font-size: 24px;
+            color: #0d6efd;
+        }
+        .timer {
+            background: #dc3545;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        .main-content {
+            margin-top: 80px;
+            margin-bottom: 30px;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .question-nav {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 15px;
+            border-radius: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+        .nav-btn {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #0d6efd;
+            background: white;
+            color: #0d6efd;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .nav-btn:hover {
+            background: #e7f1ff;
+        }
+        .nav-btn.active {
+            background: #0d6efd;
+            color: white;
+        }
+        .nav-btn.answered {
+            background: #198754;
+            color: white;
+            border-color: #198754;
+        }
+        .question-box {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        .question-box.active {
+            display: block;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 200px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .navigation-buttons {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .result-card {
+            max-width: 500px;
+            margin: 80px auto;
+            text-align: center;
+            padding: 30px;
+        }
+        .score-display {
+            font-size: 64px;
+            font-weight: bold;
+            margin: 30px 0;
+            color: #0d6efd;
+        }
+        .status-badge {
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-size: 20px;
+            font-weight: bold;
+            display: inline-block;
+            margin: 15px 0;
+        }
+        .status-lulus {
+            background-color: #198754;
+            color: white;
+        }
+        .status-tidak-lulus {
+            background-color: #dc3545;
+            color: white;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            border-radius: 15px 15px 0 0 !important;
+            padding: 15px 20px;
+        }
+        .card-body {
+            padding: 25px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header Info -->
+    <div class="header-info">
+        <div class="user-info">
+            <i class='bx bx-user-circle'></i>
+            <div>
+                <h5 class="mb-0">{{ session['username'] }}</h5>
+                <small class="text-muted">Siswa</small>
+            </div>
+        </div>
+        <div class="timer" id="timer">60:00</div>
+    </div>
+
+    {% if show_result %}
+    <div class="container">
+        <div class="card result-card">
+            <div class="card-body">
+                <i class='bx bx-medal' style="font-size: 48px; color: #0d6efd;"></i>
+                <h3 class="mt-3">Hasil Ujian</h3>
+                <div class="score-display">{{ "%.2f"|format(nilai_akhir) }}</div>
+                <div class="status-badge {{ 'status-lulus' if nilai_akhir >= 75 else 'status-tidak-lulus' }}">
+                    {{ status }}
+                </div>
+                <div class="mt-4">
+                    <a href="{{ url_for('logout') }}" class="btn btn-danger btn-lg">
+                        <i class='bx bx-log-out'></i> Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="main-content">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-4">Sistem Penilaian Esai Digital</h2>
+                
+                <form id="examForm" action="{{ url_for('submit') }}" method="POST" onsubmit="return validateForm()">
+                    {% for s in soal %}
+                    <div class="question-box {% if loop.index == 1 %}active{% endif %}" id="question-{{loop.index}}">
+                        <div class="card mb-4">
+                            <div class="card-header bg-primary text-white">
+                                <strong>Soal {{ loop.index }} dari {{ soal|length }}</strong>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text" style="font-size: 16px;">{{ s.pertanyaan }}</p>
+                                <textarea 
+                                    name="jawaban_{{ s.id }}" 
+                                    class="form-control mt-3" 
+                                    rows="8" 
+                                    placeholder="Tulis jawaban Anda di sini..."
+                                    oninput="markAnswered({{loop.index}})"
+                                    required></textarea>
+                            </div>
+                        </div>
+
+                        <div class="navigation-buttons">
+                            {% if not loop.first %}
+                            <button type="button" class="btn btn-outline-primary prev-btn" onclick="prevQuestion()">
+                                <i class='bx bx-left-arrow-alt'></i> Soal Sebelumnya
+                            </button>
+                            {% else %}
+                            <div></div>
+                            {% endif %}
+
+                            {% if loop.last %}
+                            <button type="button" class="btn btn-primary btn-lg" onclick="showSubmitConfirmation()">
+                                <i class='bx bx-check-circle'></i> Kumpulkan Jawaban
+                            </button>
+                            {% else %}
+                            <button type="button" class="btn btn-outline-primary next-btn" onclick="nextQuestion()">
+                                Soal Selanjutnya <i class='bx bx-right-arrow-alt'></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Question Navigation -->
+    <div class="question-nav">
+        {% for s in soal %}
+        <button type="button" 
+                class="nav-btn {% if loop.index == 1 %}active{% endif %}" 
+                id="nav-{{loop.index}}"
+                onclick="showQuestion({{loop.index}})">
+            {{loop.index}}
+        </button>
+        {% endfor %}
+    </div>
+
+    <!-- Submit Confirmation Modal -->
+    <div class="modal fade" id="submitConfirmationModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Konfirmasi Pengumpulan</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-4">
+                        <i class='bx bx-info-circle' style="font-size: 64px; color: #0d6efd;"></i>
+                    </div>
+                    <p>Apakah Anda yakin ingin mengumpulkan jawaban?</p>
+                    <p class="text-muted small">Pastikan semua jawaban sudah terisi dengan benar. Anda tidak dapat mengubah jawaban setelah dikumpulkan.</p>
+                    <div id="emptyQuestionsWarning" class="alert alert-warning d-none">
+                        <i class='bx bx-error'></i> Ada beberapa soal yang belum dijawab:
+                        <ul class="mb-0 mt-2" id="emptyQuestionsList"></ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class='bx bx-x'></i> Batal
+                    </button>
+                    <button type="button" class="btn btn-primary" id="confirmSubmitBtn" onclick="submitForm()">
+                        <i class='bx bx-check'></i> Ya, Kumpulkan
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentQuestion = 1;
+        let totalQuestions = {{ soal|length if not show_result else 0 }};
+        let answeredQuestions = new Set();
+        let submitModal;
+
+        function showQuestion(num) {
+            if (num < 1 || num > totalQuestions) return;
+            
+            document.querySelector('.question-box.active').classList.remove('active');
+            document.querySelector(`#question-${num}`).classList.add('active');
+            document.querySelector('.nav-btn.active').classList.remove('active');
+            document.querySelector(`#nav-${num}`).classList.add('active');
+            
+            currentQuestion = num;
+            updateNavigationButtons();
+        }
+
+        function nextQuestion() {
+            if (currentQuestion < totalQuestions) {
+                showQuestion(currentQuestion + 1);
+            }
+        }
+
+        function prevQuestion() {
+            if (currentQuestion > 1) {
+                showQuestion(currentQuestion - 1);
+            }
+        }
+
+        function markAnswered(num) {
+            let textarea = document.querySelector(`#question-${num} textarea`);
+            if (textarea.value.trim() !== '') {
+                document.querySelector(`#nav-${num}`).classList.add('answered');
+                answeredQuestions.add(num);
+            } else {
+                document.querySelector(`#nav-${num}`).classList.remove('answered');
+                answeredQuestions.delete(num);
+            }
+        }
+
+        function showSubmitConfirmation() {
+            let emptyQuestions = checkEmptyQuestions();
+            let warningDiv = document.getElementById('emptyQuestionsWarning');
+            let confirmBtn = document.getElementById('confirmSubmitBtn');
+            let listDiv = document.getElementById('emptyQuestionsList');
+            
+            listDiv.innerHTML = '';
+            
+            if (emptyQuestions.length > 0) {
+                emptyQuestions.forEach(num => {
+                    let li = document.createElement('li');
+                    li.textContent = `Soal ${num}`;
+                    listDiv.appendChild(li);
+                });
+                warningDiv.classList.remove('d-none');
+                confirmBtn.disabled = true;
+            } else {
+                warningDiv.classList.add('d-none');
+                confirmBtn.disabled = false;
+            }
+            
+            submitModal = new bootstrap.Modal(document.getElementById('submitConfirmationModal'));
+            submitModal.show();
+        }
+
+        function checkEmptyQuestions() {
+            let allTextareas = document.querySelectorAll('textarea');
+            let emptyQuestions = [];
+
+            allTextareas.forEach((textarea, index) => {
+                if (textarea.value.trim() === '') {
+                    emptyQuestions.push(index + 1);
+                }
+            });
+
+            return emptyQuestions;
+        }
+
+        function submitForm() {
+            submitModal.hide();
+            document.getElementById('examForm').submit();
+        }
+
+        function validateForm() {
+            let allTextareas = document.querySelectorAll('textarea');
+            let allAnswered = true;
+            let emptyQuestions = [];
+
+            allTextareas.forEach((textarea, index) => {
+                if (textarea.value.trim() === '') {
+                    allAnswered = false;
+                    emptyQuestions.push(index + 1);
+                }
+            });
+
+            if (!allAnswered) {
+                alert('Mohon jawab semua pertanyaan sebelum mengumpulkan.\nPertanyaan yang belum dijawab: ' + emptyQuestions.join(', '));
+                return false;
+            }
+
+            return confirm('Apakah Anda yakin ingin mengumpulkan jawaban?');
+        }
+
+        function updateNavigationButtons() {
+            let prevBtns = document.querySelectorAll('.prev-btn');
+            let nextBtns = document.querySelectorAll('.next-btn');
+            
+            prevBtns.forEach(btn => {
+                if (btn) btn.style.visibility = currentQuestion === 1 ? 'hidden' : 'visible';
+            });
+            
+            nextBtns.forEach(btn => {
+                if (btn) btn.style.visibility = currentQuestion === totalQuestions ? 'hidden' : 'visible';
+            });
+        }
+
+        function startTimer(duration) {
+            let timer = duration;
+            const timerDisplay = document.getElementById('timer');
+            
+            let countdown = setInterval(function () {
+                let minutes = parseInt(timer / 60, 10);
+                let seconds = parseInt(timer % 60, 10);
+
+                minutes = minutes < 10 ? "0" + minutes : minutes;
+                seconds = seconds < 10 ? "0" + seconds : seconds;
+
+                timerDisplay.textContent = minutes + ":" + seconds;
+
+                if (--timer < 0) {
+                    clearInterval(countdown);
+                    alert('Waktu habis! Jawaban akan dikumpulkan secara otomatis.');
+                    document.getElementById('examForm').submit();
+                }
+            }, 1000);
+        }
+
+        {% if not show_result %}
+        window.onload = function() {
+            startTimer(60 * 60);
+            updateNavigationButtons();
+        }
+
+        document.querySelectorAll('textarea').forEach(textarea => {
+            textarea.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                }
+            });
+
+            textarea.addEventListener('input', function() {
+                let questionNum = this.closest('.question-box').id.split('-')[1];
+                markAnswered(parseInt(questionNum));
+            });
+        });
+        {% endif %}
+    </script>
+</body>
+</html>

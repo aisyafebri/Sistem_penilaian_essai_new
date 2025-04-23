@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Sistem Penilaian Esai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/boxicons@2.0.7/css/boxicons.min.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 250px;
+            background: #0d6efd;
+            padding: 20px;
+            z-index: 100;
+        }
+        .sidebar .logo {
+            color: white;
+            font-size: 24px;
+            text-decoration: none;
+            margin-bottom: 30px;
+            display: block;
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 5px;
+        }
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .stat-card {
+            background: linear-gradient(45deg, #0d6efd, #0a58ca);
+            color: white;
+        }
+        .table-responsive {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+        .status-lulus {
+            background-color: #198754;
+            color: white;
+        }
+        .status-tidak-lulus {
+            background-color: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <a href="#" class="logo">
+            <i class='bx bx-brain'></i> CBT Admin
+        </a>
+        <div class="nav flex-column">
+            <a href="{{ url_for('admin_dashboard') }}" class="nav-link active">
+                <i class='bx bx-home'></i> Dashboard
+            </a>
+            <a href="{{ url_for('kelola_soal') }}" class="nav-link">
+                <i class='bx bx-question-mark'></i> Kelola Soal
+            </a>
+            <a href="{{ url_for('kelola_user') }}" class="nav-link">
+                <i class='bx bx-user'></i> Kelola User
+            </a>
+            <a href="{{ url_for('logout') }}" class="nav-link text-danger">
+                <i class='bx bx-log-out'></i> Logout
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container-fluid">
+            <!-- Welcome Message -->
+            <h4 class="mb-4">Selamat Datang, {{ session['username'] }}!</h4>
+
+            <!-- Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <h6 class="card-title">Total Siswa</h6>
+                            <h3 class="mb-0">{{ users|selectattr('role', 'equalto', 'siswa')|list|length }}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <h6 class="card-title">Total Soal</h6>
+                            <h3 class="mb-0">{{ soal|length }}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <h6 class="card-title">Rata-rata Nilai</h6>
+                            <h3 class="mb-0">
+                                {% set total = namespace(value=0, count=0) %}
+                                {% for j in jawaban %}
+                                    {% set total.value = total.value + j.skor_akhir %}
+                                    {% set total.count = total.count + 1 %}
+                                {% endfor %}
+                                {{ "%.2f"|format(total.value / total.count if total.count > 0 else 0) }}
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card">
+                        <div class="card-body">
+                            <h6 class="card-title">Tingkat Kelulusan</h6>
+                            <h3 class="mb-0">
+                                {% set lulus = namespace(count=0) %}
+                                {% for j in jawaban %}
+                                    {% if j.status_akhir == "Lulus" %}
+                                        {% set lulus.count = lulus.count + 1 %}
+                                    {% endif %}
+                                {% endfor %}
+                                {{ "%.1f"|format(lulus.count / jawaban|length * 100 if jawaban|length > 0 else 0) }}%
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ringkasan Nilai Per Siswa -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">Ringkasan Nilai Per Siswa</h5>
+                    <div class="table-responsive">
+                        <table id="nilaiSiswaTable" class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Nama Siswa</th>
+                                    <th>Jumlah Soal</th>
+                                    <th>Rata-rata Nilai</th>
+                                    <th>Status</th>
+                                    <th>Detail</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users if user.role == 'siswa' %}
+                                    {% set stats = namespace(total=0, count=0) %}
+                                    {% for j in jawaban if j.user.id == user.id %}
+                                        {% set stats.total = stats.total + j.skor_akhir %}
+                                        {% set stats.count = stats.count + 1 %}
+                                    {% endfor %}
+                                    {% set rata_rata = stats.total / stats.count if stats.count > 0 else 0 %}
+                                    <tr>
+                                        <td>{{ user.username }}</td>
+                                        <td>{{ stats.count }}</td>
+                                        <td>{{ "%.2f"|format(rata_rata) }}</td>
+                                        <td>
+                                            <span class="status-badge {{ 'status-lulus' if rata_rata >= 75 else 'status-tidak-lulus' }}">
+                                                {{ "Lulus" if rata_rata >= 75 else "Tidak Lulus" }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-primary" onclick="showDetailJawaban('{{ user.username }}')">
+                                                <i class='bx bx-detail'></i> Detail
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detail Jawaban Siswa -->
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">Detail Jawaban Siswa</h5>
+                    <div class="table-responsive">
+                        <table id="hasilTable" class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Nama Siswa</th>
+                                    <th>Soal</th>
+                                    <th>Jawaban</th>
+                                    <th>Skor Semantik</th>
+                                    <th>Skor Sintaksis</th>
+                                    <th>Skor Akhir</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for j in jawaban %}
+                                <tr>
+                                    <td>{{ j.user.username }}</td>
+                                    <td>{{ j.soal.pertanyaan[:50] }}...</td>
+                                    <td>{{ j.jawaban_siswa[:50] }}...</td>
+                                    <td>{{ "%.2f"|format(j.skor_semantik) }}</td>
+                                    <td>{{ "%.2f"|format(j.skor_sintaksis) }}</td>
+                                    <td>{{ "%.2f"|format(j.skor_akhir) }}</td>
+                                    <td>
+                                        <span class="status-badge {{ 'status-lulus' if j.status_akhir == 'Lulus' else 'status-tidak-lulus' }}">
+                                            {{ j.status_akhir }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable for student summary only
+            $('#nilaiSiswaTable').DataTable({
+                pageLength: 10,
+                order: [[2, 'desc']],
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/id.json'
+                }
+            });
+
+            // Regular table for detailed answers
+            $('#hasilTable').addClass('table-bordered');
+        });
+    </script>
+</body>
+</html>
