@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from Levenshtein import distance as levenshtein_distance
 from transformers import BertTokenizer, BertModel
@@ -10,6 +10,10 @@ from difflib import SequenceMatcher
 from collections import Counter
 import nltk
 import re
+import pandas as pd
+import io
+import os
+from werkzeug.utils import secure_filename
 
 # Download NLTK resources
 try:
@@ -122,12 +126,19 @@ def siswa():
     # Check if there are existing answers for this user
     jawaban_exists = Jawaban.query.filter_by(id_user=session['user_id']).first()
     if jawaban_exists:
-        # Calculate average score and status
-        jawaban_user = Jawaban.query.filter_by(id_user=session['user_id']).all()
-        total_nilai = sum(j.skor_akhir for j in jawaban_user)
-        nilai_akhir = total_nilai / len(jawaban_user) if jawaban_user else 0
+        # Get all answers for this user with their questions
+        jawaban_detail = Jawaban.query.filter_by(id_user=session['user_id']).all()
+        
+        # Calculate average score
+        total_nilai = sum(j.skor_akhir for j in jawaban_detail)
+        nilai_akhir = total_nilai / len(jawaban_detail) if jawaban_detail else 0
         status = "Lulus" if nilai_akhir >= 75 else "Tidak Lulus"
-        return render_template("siswa.html", show_result=True, nilai_akhir=nilai_akhir, status=status)
+        
+        return render_template("siswa.html", 
+                             show_result=True, 
+                             nilai_akhir=nilai_akhir, 
+                             status=status,
+                             jawaban_detail=jawaban_detail)
     
     soal_semua = Soal.query.all()
     if len(soal_semua) < 10:
@@ -198,6 +209,172 @@ def hapus_soal(id):
     db.session.commit()
     flash('Soal berhasil dihapus', 'success')
     return redirect(url_for('kelola_soal'))
+
+# Import/Export routes
+@app.route("/admin/soal/export")
+@login_required
+@role_required(['admin'])
+def export_soal():
+    try:
+        # Query all soal from database
+        soal_all = Soal.query.all()
+        
+        # Create DataFrame
+        data = {
+            'ID': [soal.id for soal in soal_all],
+            'Pertanyaan': [soal.pertanyaan for soal in soal_all],
+            'Kunci Jawaban': [soal.kunci_jawaban for soal in soal_all]
+        }
+        df = pd.DataFrame(data)
+        
+        # Create Excel file in memory
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Soal', index=False)
+            
+            # Get the worksheet
+            worksheet = writer.sheets['Soal']
+            
+            # Format headers (bold)
+            for cell in worksheet[1]:
+                cell.font = cell.font.copy(bold=True)
+            
+            # Set column widths
+            worksheet.column_dimensions['A'].width = 8  # ID column
+            worksheet.column_dimensions['B'].width = 50  # Pertanyaan column
+            worksheet.column_dimensions['C'].width = 50  # Kunci Jawaban column
+        
+        output.seek(0)
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='soal_export.xlsx'
+        )
+        
+    except Exception as e:
+        flash(f'Terjadi kesalahan saat mengekspor soal: {str(e)}', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route("/admin/soal/template")
+@login_required
+@role_required(['admin'])
+def download_template():
+    try:
+        # Create sample DataFrame
+        data = {
+            'ID': [1, 2],
+            'Pertanyaan': [
+                'Contoh pertanyaan 1?',
+                'Contoh pertanyaan 2?'
+            ],
+            'Kunci Jawaban': [
+                'Contoh jawaban untuk pertanyaan 1.',
+                'Contoh jawaban untuk pertanyaan 2.'
+            ]
+        }
+        df = pd.DataFrame(data)
+        
+        # Create Excel file in memory
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Template', index=False)
+            
+            # Get the worksheet
+            worksheet = writer.sheets['Template']
+            
+            # Format headers (bold)
+            for cell in worksheet[1]:
+                cell.font = cell.font.copy(bold=True)
+            
+            # Set column widths
+            worksheet.column_dimensions['A'].width = 8  # ID column
+            worksheet.column_dimensions['B'].width = 50  # Pertanyaan column
+            worksheet.column_dimensions['C'].width = 50  # Kunci Jawaban column
+        
+        output.seek(0)
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='template_soal.xlsx'
+        )
+        
+    except Exception as e:
+        flash(f'Terjadi kesalahan saat mengunduh template: {str(e)}', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route("/admin/soal/import", methods=['POST'])
+@login_required
+@role_required(['admin'])
+def import_soal():
+    if 'file' not in request.files:
+        flash('Tidak ada file yang diunggah', 'error')
+        return redirect(url_for('admin_dashboard'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('Tidak ada file yang dipilih', 'error')
+        return redirect(url_for('admin_dashboard'))
+    
+    if not file.filename.endswith('.xlsx'):
+        flash('File harus berformat Excel (.xlsx)', 'error')
+        return redirect(url_for('admin_dashboard'))
+    
+    try:
+        # Read Excel file
+        df = pd.read_excel(file)
+        
+        # Validate required columns
+        required_columns = ['Pertanyaan', 'Kunci Jawaban']
+        if not all(col in df.columns for col in required_columns):
+            flash('Format file tidak sesuai. Gunakan template yang disediakan', 'error')
+            return redirect(url_for('admin_dashboard'))
+        
+        # Import questions
+        success_count = 0
+        skip_count = 0
+        
+        for _, row in df.iterrows():
+            try:
+                # Check if question already exists
+                existing_soal = Soal.query.filter_by(
+                    pertanyaan=row['Pertanyaan'],
+                    kunci_jawaban=row['Kunci Jawaban']
+                ).first()
+                
+                if existing_soal:
+                    skip_count += 1
+                    continue
+                
+                soal = Soal(
+                    pertanyaan=row['Pertanyaan'],
+                    kunci_jawaban=row['Kunci Jawaban']
+                )
+                db.session.add(soal)
+                success_count += 1
+            except Exception as e:
+                continue
+        
+        db.session.commit()
+        
+        if success_count > 0:
+            if skip_count > 0:
+                flash(f'Berhasil mengimpor {success_count} soal baru. {skip_count} soal dilewati karena sudah ada.', 'success')
+            else:
+                flash(f'Berhasil mengimpor {success_count} soal baru.', 'success')
+        else:
+            if skip_count > 0:
+                flash(f'Tidak ada soal baru yang diimpor. {skip_count} soal dilewati karena sudah ada.', 'info')
+            else:
+                flash('Tidak ada soal yang berhasil diimpor', 'error')
+        
+    except Exception as e:
+        flash(f'Terjadi kesalahan saat mengimpor soal: {str(e)}', 'error')
+    
+    return redirect(url_for('admin_dashboard'))
 
 # Kelola User routes
 @app.route("/admin/users")
@@ -270,40 +447,115 @@ def hapus_user(id):
         flash('User berhasil dihapus', 'success')
     return redirect(url_for('kelola_user'))
 
+# Load BERT
+tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
+model = BertModel.from_pretrained('indobenchmark/indobert-base-p1')
+model.eval()  # Set model to evaluation mode
+
+# Cache for storing embeddings
+embedding_cache = {}
+
+# Fungsi Penilaian Semantik dengan caching
+def hitung_semantik(jawaban_siswa, jawaban_benar):
+    # Check cache first
+    cache_key = f"{jawaban_siswa}_{jawaban_benar}"
+    if cache_key in embedding_cache:
+        return embedding_cache[cache_key]
+    
+    with torch.no_grad():
+        # Batch process both inputs together
+        inputs = tokenizer([jawaban_siswa, jawaban_benar], return_tensors="pt", padding=True, truncation=True)
+        outputs = model(**inputs).last_hidden_state.mean(dim=1)
+        similarity = torch.nn.functional.cosine_similarity(outputs[0].unsqueeze(0), outputs[1].unsqueeze(0))
+        score = similarity.item()
+        
+        # Cache the result
+        embedding_cache[cache_key] = score
+        return score
+
+# Fungsi Penilaian Sintaksis yang dioptimasi
+def hitung_sintaksis(jawaban_siswa, jawaban_benar):
+    """
+    Menghitung skor sintaksis dengan pendekatan yang lebih efisien.
+    """
+    # Preprocessing yang lebih ringan
+    def preprocess(text):
+        return ' '.join(text.lower().split())
+
+    # Preprocess input
+    jawaban_siswa = preprocess(jawaban_siswa)
+    jawaban_benar = preprocess(jawaban_benar)
+    
+    # Split words once
+    kata_siswa = set(jawaban_siswa.split())
+    kata_benar = set(jawaban_benar.split())
+    
+    # Quick length check
+    if not kata_benar or not kata_siswa:
+        return 0.0
+    
+    # Calculate word match score (50%)
+    kata_cocok = kata_siswa.intersection(kata_benar)
+    word_match_score = len(kata_cocok) / len(kata_benar)
+    
+    # Calculate sequence score (30%)
+    sequence_score = SequenceMatcher(None, jawaban_siswa, jawaban_benar).quick_ratio()
+    
+    # Calculate length score (20%)
+    length_ratio = min(len(jawaban_siswa), len(jawaban_benar)) / max(len(jawaban_siswa), len(jawaban_benar))
+    
+    # Calculate final score
+    skor = (word_match_score * 0.5) + (sequence_score * 0.3) + (length_ratio * 0.2)
+    
+    # Add bonus for very similar answers
+    if word_match_score > 0.8 and sequence_score > 0.7:
+        skor = min(1.0, skor + 0.1)
+    
+    return skor
+
 # Proses submit jawaban
 @app.route("/submit", methods=["POST"])
 @login_required
 @role_required(['siswa'])
 def submit():
+    submitted_question_ids = [int(key.split('_')[1]) for key in request.form.keys() if key.startswith('jawaban_')]
+    
+    if len(submitted_question_ids) != 10:
+        flash('Error: Jumlah soal tidak sesuai', 'error')
+        return redirect(url_for('siswa'))
+    
+    soal_ujian = Soal.query.filter(Soal.id.in_(submitted_question_ids)).all()
     total_nilai = 0
-    jumlah_soal = 0
-
-    for soal in Soal.query.all():
+    
+    # Delete existing answers
+    Jawaban.query.filter_by(id_user=session['user_id']).delete()
+    db.session.commit()
+    
+    # Process answers in batches
+    jawaban_batch = []
+    for soal in soal_ujian:
         jawaban_siswa = request.form.get(f"jawaban_{soal.id}")
         if jawaban_siswa:
-            # Bobot baru: 80% semantik, 20% sintaksis
+            # Calculate scores
             skor_semantik = hitung_semantik(jawaban_siswa, soal.kunci_jawaban)
             skor_sintaksis = hitung_sintaksis(jawaban_siswa, soal.kunci_jawaban)
             
-            # Hitung skor dengan bobot baru
+            # Calculate final score (80% semantik, 20% sintaksis)
             skor_akhir = (0.8 * skor_semantik + 0.2 * skor_sintaksis) * 100
-
-            # Sistem bonus yang lebih manusiawi
-            if 60 <= skor_akhir < 75:  # Rentang yang lebih luas untuk bonus
-                # Bonus bertingkat berdasarkan kedekatan dengan nilai kelulusan
-                if 70 <= skor_akhir < 75:
-                    skor_akhir += 7  # Bonus besar untuk yang hampir lulus
-                elif 65 <= skor_akhir < 70:
-                    skor_akhir += 5  # Bonus menengah
-                else:
-                    skor_akhir += 3  # Bonus kecil untuk usaha yang cukup baik
-
-            # Pastikan tidak melebihi 100
-            skor_akhir = min(100, skor_akhir)
             
+            # Apply bonus
+            if 60 <= skor_akhir < 75:
+                if 70 <= skor_akhir < 75:
+                    skor_akhir += 7
+                elif 65 <= skor_akhir < 70:
+                    skor_akhir += 5
+                else:
+                    skor_akhir += 3
+            
+            skor_akhir = min(100, skor_akhir)
             status = "Lulus" if skor_akhir >= 75 else "Tidak Lulus"
             
-            simpan_jawaban = Jawaban(
+            jawaban_batch.append(Jawaban(
                 id_user=session['user_id'],
                 id_soal=soal.id,
                 jawaban_siswa=jawaban_siswa,
@@ -311,90 +563,38 @@ def submit():
                 skor_sintaksis=skor_sintaksis * 100,
                 skor_akhir=skor_akhir,
                 status_akhir=status
-            )
-            db.session.add(simpan_jawaban)
+            ))
             total_nilai += skor_akhir
-            jumlah_soal += 1
-
+    
+    # Batch insert answers
+    db.session.bulk_save_objects(jawaban_batch)
     db.session.commit()
-    nilai_akhir = total_nilai / jumlah_soal if jumlah_soal > 0 else 0
+    
+    nilai_akhir = total_nilai / len(soal_ujian)
     status = "Lulus" if nilai_akhir >= 75 else "Tidak Lulus"
     
-    return render_template("siswa.html", show_result=True, nilai_akhir=nilai_akhir, status=status)
-
-# Load BERT
-tokenizer = BertTokenizer.from_pretrained('indobenchmark/indobert-base-p1')
-model = BertModel.from_pretrained('indobenchmark/indobert-base-p1')
-
-# Fungsi Penilaian Semantik
-def hitung_semantik(jawaban_siswa, jawaban_benar):
-    with torch.no_grad():
-        inputs_siswa = tokenizer(jawaban_siswa, return_tensors="pt", padding=True, truncation=True)
-        inputs_benar = tokenizer(jawaban_benar, return_tensors="pt", padding=True, truncation=True)
-        emb_siswa = model(**inputs_siswa).last_hidden_state.mean(dim=1)
-        emb_benar = model(**inputs_benar).last_hidden_state.mean(dim=1)
-        similarity = torch.nn.functional.cosine_similarity(emb_siswa, emb_benar)
-        return similarity.item()
-
-# Fungsi Penilaian Sintaksis
-def hitung_sintaksis(jawaban_siswa, jawaban_benar):
-    """
-    Menghitung skor sintaksis dengan pendekatan yang lebih manusiawi.
-    """
-    # Preprocessing yang lebih baik
-    def preprocess(text):
-        # Lowercase dan hapus spasi berlebih
-        text = text.lower().strip()
-        # Hapus tanda baca kecuali titik
-        text = re.sub(r'[^\w\s\.]', '', text)
-        # Normalisasi spasi
-        text = ' '.join(text.split())
-        return text
-
-    # Preprocess input
-    jawaban_siswa = preprocess(jawaban_siswa)
-    jawaban_benar = preprocess(jawaban_benar)
-
-    # Hitung Levenshtein distance
-    distance = levenshtein_distance(jawaban_siswa, jawaban_benar)
+    # Get answer details
+    jawaban_detail = (Jawaban.query
+        .filter_by(id_user=session['user_id'])
+        .join(Soal)
+        .add_columns(
+            Soal.pertanyaan,
+            Soal.kunci_jawaban,
+            Jawaban.jawaban_siswa,
+            Jawaban.skor_semantik,
+            Jawaban.skor_sintaksis,
+            Jawaban.skor_akhir,
+            Jawaban.status_akhir
+        )
+        .all())
     
-    # Hitung skor berbasis kata
-    kata_benar = set(jawaban_benar.split())
-    kata_siswa = set(jawaban_siswa.split())
-    
-    # Hitung kata yang cocok
-    kata_cocok = kata_siswa.intersection(kata_benar)
-    total_kata_unik = len(kata_benar.union(kata_siswa))
-    
-    # Hitung berbagai komponen skor
-    if total_kata_unik == 0:
-        return 0.0
-        
-    # 1. Skor kecocokan kata (50% dari total)
-    word_match_score = len(kata_cocok) / len(kata_benar) if kata_benar else 0
-    
-    # 2. Skor urutan kata (30% dari total)
-    sequence_score = SequenceMatcher(None, jawaban_siswa, jawaban_benar).ratio()
-    
-    # 3. Skor panjang (20% dari total)
-    length_ratio = min(len(jawaban_siswa), len(jawaban_benar)) / max(len(jawaban_siswa), len(jawaban_benar))
-    
-    # Hitung skor akhir dengan pembobotan
-    skor = (word_match_score * 0.5) + (sequence_score * 0.3) + (length_ratio * 0.2)
-    
-    # Tambahkan bonus untuk jawaban yang sangat mirip
-    if word_match_score > 0.8 and sequence_score > 0.7:
-        skor += 0.1  # Bonus 10% untuk jawaban yang sangat mirip
-    
-    # Debug print
-    print("\nDetail Perhitungan Skor Sintaksis:")
-    print(f"Kata yang Cocok: {len(kata_cocok)} dari {len(kata_benar)}")
-    print(f"Skor Kecocokan Kata: {word_match_score:.2f}")
-    print(f"Skor Urutan: {sequence_score:.2f}")
-    print(f"Skor Panjang: {length_ratio:.2f}")
-    print(f"Skor Akhir: {skor:.2f}")
-    
-    return max(0.0, min(1.0, skor))
+    return render_template(
+        "siswa.html", 
+        show_result=True, 
+        nilai_akhir=nilai_akhir, 
+        status=status,
+        jawaban_detail=jawaban_detail
+    )
 
 if __name__ == "__main__":
     with app.app_context():

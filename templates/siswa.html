@@ -202,9 +202,116 @@
         .alert {
             border-radius: 10px;
         }
+        .result-section {
+            margin: 2rem auto;
+            padding: 1rem;
+            max-width: 1200px;
+        }
+        .result-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 2rem;
+            text-align: center;
+        }
+        .score-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .final-score {
+            font-size: 72px;
+            font-weight: bold;
+            color: #0d6efd;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-badge {
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 24px;
+            font-weight: bold;
+            display: inline-block;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-lulus {
+            background-color: #198754;
+            color: white;
+        }
+        .status-tidak-lulus {
+            background-color: #dc3545;
+            color: white;
+        }
+        .table-responsive {
+            margin-top: 2rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .progress {
+            border-radius: 20px;
+            background-color: #f0f0f0;
+        }
+        .progress-bar {
+            border-radius: 20px;
+            text-align: center;
+            line-height: 20px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+        }
+        .btn-link {
+            color: #0d6efd;
+        }
+        .btn-link:hover {
+            color: #0a58ca;
+        }
+        .card-body.bg-light {
+            border-radius: 10px;
+        }
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #0d6efd;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        .loading-text {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #0d6efd;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Sedang menilai jawaban...</div>
+    </div>
+
     <!-- Header Info -->
     <div class="header-info">
         <div class="user-info">
@@ -214,25 +321,76 @@
                 <small class="text-muted">Siswa</small>
             </div>
         </div>
-        <div class="timer" id="timer">90:00</div>
+        <div class="timer" id="timer">10:00</div>
     </div>
 
     {% if show_result %}
-    <div class="container">
+    <div class="result-section">
         <div class="result-card">
             <i class='bx bx-medal' style="font-size: 64px; color: #0d6efd;"></i>
             <h2 class="mt-3">Hasil Ujian</h2>
-            <div class="score-display">{{ "%.1f"|format(nilai_akhir) }}</div>
-            <div class="status-badge {{ 'status-lulus' if nilai_akhir >= 75 else 'status-tidak-lulus' }}">
-                {{ status }}
+            <div class="score-display">
+                <div class="final-score">{{ "%.1f"|format(nilai_akhir) }}</div>
+                <div class="status-badge {{ 'status-lulus' if status == 'Lulus' else 'status-tidak-lulus' }}">
+                    {{ status }}
+                </div>
             </div>
-            <p class="text-muted mb-4">
-                {% if nilai_akhir >= 75 %}
-                    Selamat! Anda telah berhasil menyelesaikan ujian dengan baik.
-                {% else %}
-                    Jangan menyerah! Terus belajar dan tingkatkan pemahaman Anda.
-                {% endif %}
-            </p>
+            
+            <div class="answer-details">
+                <h4 class="mb-3">Detail Nilai Per Soal</h4>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>No</th>
+                                <th>Pertanyaan</th>
+                                <th>Jawaban Anda</th>
+                                <th>Nilai Akhir</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for jawaban in jawaban_detail %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ jawaban.pertanyaan }}</td>
+                                <td>
+                                    <button class="btn btn-link text-decoration-none p-0" type="button" 
+                                            data-bs-toggle="collapse" 
+                                            data-bs-target="#jawaban{{ loop.index }}" 
+                                            aria-expanded="false">
+                                        Lihat Jawaban
+                                    </button>
+                                    <div class="collapse mt-2" id="jawaban{{ loop.index }}">
+                                        <div class="card card-body bg-light">
+                                            <p class="mb-0">{{ jawaban.jawaban_siswa }}</p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar {{ 'bg-success' if jawaban.skor_akhir >= 75 else 'bg-danger' }}" 
+                                             role="progressbar" 
+                                             style="width: {{ jawaban.skor_akhir }}%"
+                                             aria-valuenow="{{ jawaban.skor_akhir }}"
+                                             aria-valuemin="0"
+                                             aria-valuemax="100">
+                                            {{ "%.1f"|format(jawaban.skor_akhir) }}%
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge {{ 'bg-success' if jawaban.skor_akhir >= 75 else 'bg-danger' }}">
+                                        {{ "Lulus" if jawaban.skor_akhir >= 75 else "Tidak Lulus" }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="mt-4">
                 <a href="{{ url_for('logout') }}" class="btn btn-danger btn-lg">
                     <i class='bx bx-log-out'></i> Selesai
@@ -428,8 +586,13 @@
             return emptyQuestions;
         }
 
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+
         function submitForm() {
             submitModal.hide();
+            showLoading();
             document.getElementById('examForm').submit();
         }
 
@@ -462,6 +625,7 @@
                 if (--timer < 0) {
                     clearInterval(countdown);
                     alert('Waktu habis! Jawaban akan dikumpulkan secara otomatis.');
+                    showLoading();
                     document.getElementById('examForm').submit();
                 }
             }, 1000);
