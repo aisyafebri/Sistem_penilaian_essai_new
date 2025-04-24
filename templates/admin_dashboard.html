@@ -158,7 +158,7 @@
                                 {% for j in jawaban %}
                                     {% set total.value = total.value + j.skor_akhir %}
                                     {% set total.count = total.count + 1 %}
-                                {% endfor %}
+    {% endfor %}
                                 {{ "%.2f"|format(total.value / total.count if total.count > 0 else 0) }}
                             </h3>
                         </div>
@@ -170,7 +170,7 @@
                             <h6 class="card-title">Tingkat Kelulusan</h6>
                             <h3 class="mb-0">
                                 {% set lulus = namespace(count=0) %}
-                                {% for j in jawaban %}
+    {% for j in jawaban %}
                                     {% if j.status_akhir == "Lulus" %}
                                         {% set lulus.count = lulus.count + 1 %}
                                     {% endif %}
@@ -313,10 +313,10 @@
                                             {{ j.status_akhir }}
                                         </span>
                                     </td>
-                                </tr>
-                                {% endfor %}
+    </tr>
+    {% endfor %}
                             </tbody>
-                        </table>
+  </table>
                     </div>
                 </div>
             </div>

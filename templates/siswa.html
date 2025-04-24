@@ -43,8 +43,8 @@
         }
         .main-content {
             margin-top: 80px;
-            margin-bottom: 30px;
-            max-width: 900px;
+            margin-bottom: 100px;
+            max-width: 1000px;
             margin-left: auto;
             margin-right: auto;
         }
@@ -54,16 +54,19 @@
             left: 50%;
             transform: translateX(-50%);
             background: white;
-            padding: 15px;
+            padding: 15px 25px;
             border-radius: 30px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             display: flex;
-            gap: 10px;
+            gap: 8px;
             z-index: 1000;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 90%;
         }
         .nav-btn {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             border: 2px solid #0d6efd;
             background: white;
             color: #0d6efd;
@@ -71,6 +74,11 @@
             cursor: pointer;
             font-weight: bold;
             transition: all 0.3s ease;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
         }
         .nav-btn:hover {
             background: #e7f1ff;
@@ -96,31 +104,38 @@
             min-height: 200px;
             font-size: 16px;
             line-height: 1.6;
+            padding: 15px;
         }
         .navigation-buttons {
             margin-top: 20px;
             display: flex;
             justify-content: space-between;
+            gap: 10px;
         }
         .result-card {
-            max-width: 500px;
+            max-width: 600px;
             margin: 80px auto;
             text-align: center;
-            padding: 30px;
+            padding: 40px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .score-display {
-            font-size: 64px;
+            font-size: 72px;
             font-weight: bold;
             margin: 30px 0;
             color: #0d6efd;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
         }
         .status-badge {
-            padding: 10px 25px;
+            padding: 12px 30px;
             border-radius: 25px;
-            font-size: 20px;
+            font-size: 24px;
             font-weight: bold;
             display: inline-block;
-            margin: 15px 0;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .status-lulus {
             background-color: #198754;
@@ -130,21 +145,62 @@
             background-color: #dc3545;
             color: white;
         }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
         .card {
             border: none;
             border-radius: 15px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
         .card-header {
+            background: #f8f9fa;
             border-radius: 15px 15px 0 0 !important;
-            padding: 15px 20px;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
         }
         .card-body {
             padding: 25px;
+        }
+        .progress-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #e7f1ff;
+            border-radius: 10px;
+        }
+        .progress-text {
+            font-size: 16px;
+            color: #0d6efd;
+            font-weight: 500;
+        }
+        .btn {
+            padding: 10px 20px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn i {
+            font-size: 20px;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+        }
+        .modal-header {
+            border-radius: 15px 15px 0 0;
+            background: #f8f9fa;
+        }
+        .modal-body {
+            padding: 25px;
+        }
+        .alert {
+            border-radius: 10px;
         }
     </style>
 </head>
@@ -158,24 +214,29 @@
                 <small class="text-muted">Siswa</small>
             </div>
         </div>
-        <div class="timer" id="timer">60:00</div>
+        <div class="timer" id="timer">90:00</div>
     </div>
 
     {% if show_result %}
     <div class="container">
-        <div class="card result-card">
-            <div class="card-body">
-                <i class='bx bx-medal' style="font-size: 48px; color: #0d6efd;"></i>
-                <h3 class="mt-3">Hasil Ujian</h3>
-                <div class="score-display">{{ "%.2f"|format(nilai_akhir) }}</div>
-                <div class="status-badge {{ 'status-lulus' if nilai_akhir >= 75 else 'status-tidak-lulus' }}">
-                    {{ status }}
-                </div>
-                <div class="mt-4">
-                    <a href="{{ url_for('logout') }}" class="btn btn-danger btn-lg">
-                        <i class='bx bx-log-out'></i> Logout
-                    </a>
-                </div>
+        <div class="result-card">
+            <i class='bx bx-medal' style="font-size: 64px; color: #0d6efd;"></i>
+            <h2 class="mt-3">Hasil Ujian</h2>
+            <div class="score-display">{{ "%.1f"|format(nilai_akhir) }}</div>
+            <div class="status-badge {{ 'status-lulus' if nilai_akhir >= 75 else 'status-tidak-lulus' }}">
+                {{ status }}
+            </div>
+            <p class="text-muted mb-4">
+                {% if nilai_akhir >= 75 %}
+                    Selamat! Anda telah berhasil menyelesaikan ujian dengan baik.
+                {% else %}
+                    Jangan menyerah! Terus belajar dan tingkatkan pemahaman Anda.
+                {% endif %}
+            </p>
+            <div class="mt-4">
+                <a href="{{ url_for('logout') }}" class="btn btn-danger btn-lg">
+                    <i class='bx bx-log-out'></i> Selesai
+                </a>
             </div>
         </div>
     </div>
@@ -185,12 +246,23 @@
             <div class="card-body">
                 <h2 class="card-title text-center mb-4">Sistem Penilaian Esai Digital</h2>
                 
+                <div class="progress-indicator">
+                    <i class='bx bx-info-circle' style="font-size: 24px; color: #0d6efd;"></i>
+                    <div class="progress-text">
+                        Jawablah 10 pertanyaan berikut dengan jelas dan lengkap.
+                        Pastikan semua pertanyaan terjawab sebelum mengumpulkan.
+                    </div>
+                </div>
+
                 <form id="examForm" action="{{ url_for('submit') }}" method="POST" onsubmit="return validateForm()">
                     {% for s in soal %}
                     <div class="question-box {% if loop.index == 1 %}active{% endif %}" id="question-{{loop.index}}">
-                        <div class="card mb-4">
-                            <div class="card-header bg-primary text-white">
-                                <strong>Soal {{ loop.index }} dari {{ soal|length }}</strong>
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong>Soal {{ loop.index }} dari {{ soal|length }}</strong>
+                                    <span class="badge bg-primary">{{ loop.index }}/{{ soal|length }}</span>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <p class="card-text" style="font-size: 16px;">{{ s.pertanyaan }}</p>
@@ -224,16 +296,6 @@
                             </button>
                             {% endif %}
                         </div>
-
-                        <!-- Navigation buttons -->
-                        <button 
-                            type="button"
-                            class="nav-btn {% if loop.index == 1 %}active{% endif %}"
-                            id="nav-{{loop.index}}"
-                            onclick="showQuestion({{loop.index}})"
-                        >
-                            {{loop.index}}
-                        </button>
                     </div>
                     {% endfor %}
                 </form>
@@ -266,7 +328,7 @@
                         <i class='bx bx-info-circle' style="font-size: 64px; color: #0d6efd;"></i>
                     </div>
                     <p>Apakah Anda yakin ingin mengumpulkan jawaban?</p>
-                    <p class="text-muted small">Pastikan semua jawaban sudah terisi dengan benar. Anda tidak dapat mengubah jawaban setelah dikumpulkan.</p>
+                    <p class="text-muted">Pastikan semua jawaban sudah terisi dengan benar. Anda tidak dapat mengubah jawaban setelah dikumpulkan.</p>
                     <div id="emptyQuestionsWarning" class="alert alert-warning d-none">
                         <i class='bx bx-error'></i> Ada beberapa soal yang belum dijawab:
                         <ul class="mb-0 mt-2" id="emptyQuestionsList"></ul>
@@ -287,7 +349,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const currentQuestion = 1;
+        let currentQuestion = 1;
         const totalQuestions = {{ soal|length if not show_result else 0 }};
         const answeredQuestions = new Set();
         let submitModal;
@@ -297,6 +359,8 @@
             
             document.querySelector('.question-box.active').classList.remove('active');
             document.querySelector(`#question-${num}`).classList.add('active');
+            
+            // Update navigation buttons
             document.querySelector('.nav-btn.active').classList.remove('active');
             document.querySelector(`#nav-${num}`).classList.add('active');
             
@@ -318,11 +382,13 @@
 
         function markAnswered(num) {
             let textarea = document.querySelector(`#question-${num} textarea`);
+            let navButton = document.querySelector(`#nav-${num}`);
+            
             if (textarea.value.trim() !== '') {
-                document.querySelector(`#nav-${num}`).classList.add('answered');
+                navButton.classList.add('answered');
                 answeredQuestions.add(num);
             } else {
-                document.querySelector(`#nav-${num}`).classList.remove('answered');
+                navButton.classList.remove('answered');
                 answeredQuestions.delete(num);
             }
         }
@@ -353,41 +419,18 @@
         }
 
         function checkEmptyQuestions() {
-            let allTextareas = document.querySelectorAll('textarea');
             let emptyQuestions = [];
-
-            allTextareas.forEach((textarea, index) => {
+            document.querySelectorAll('textarea').forEach((textarea, index) => {
                 if (textarea.value.trim() === '') {
                     emptyQuestions.push(index + 1);
                 }
             });
-
             return emptyQuestions;
         }
 
         function submitForm() {
             submitModal.hide();
             document.getElementById('examForm').submit();
-        }
-
-        function validateForm() {
-            let allTextareas = document.querySelectorAll('textarea');
-            let allAnswered = true;
-            let emptyQuestions = [];
-
-            allTextareas.forEach((textarea, index) => {
-                if (textarea.value.trim() === '') {
-                    allAnswered = false;
-                    emptyQuestions.push(index + 1);
-                }
-            });
-
-            if (!allAnswered) {
-                alert('Mohon jawab semua pertanyaan sebelum mengumpulkan.\nPertanyaan yang belum dijawab: ' + emptyQuestions.join(', '));
-                return false;
-            }
-
-            return confirm('Apakah Anda yakin ingin mengumpulkan jawaban?');
         }
 
         function updateNavigationButtons() {
@@ -426,10 +469,18 @@
 
         {% if not show_result %}
         window.onload = function() {
-            startTimer(60 * 60);
+            startTimer(90 * 60); // 90 menit
             updateNavigationButtons();
+            
+            // Check for answered questions on page load
+            document.querySelectorAll('textarea').forEach((textarea, index) => {
+                if (textarea.value.trim() !== '') {
+                    markAnswered(index + 1);
+                }
+            });
         }
 
+        // Prevent enter key from submitting form
         document.querySelectorAll('textarea').forEach(textarea => {
             textarea.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' && !e.shiftKey) {

@@ -9,6 +9,7 @@ import random
 from difflib import SequenceMatcher
 from collections import Counter
 import nltk
+import re
 
 # Download NLTK resources
 try:
@@ -23,7 +24,6 @@ except LookupError:
 
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
-import re
 
 # Inisialisasi Flask dan database
 app = Flask(__name__)
@@ -130,7 +130,11 @@ def siswa():
         return render_template("siswa.html", show_result=True, nilai_akhir=nilai_akhir, status=status)
     
     soal_semua = Soal.query.all()
-    soal_acak = random.sample(soal_semua, 5)  # ambil acak 5 soal
+    if len(soal_semua) < 10:
+        flash('Minimal harus ada 10 soal yang tersedia', 'error')
+        return redirect(url_for('login'))
+    
+    soal_acak = random.sample(soal_semua, 10)  # ambil acak 10 soal
     return render_template("siswa.html", soal=soal_acak, show_result=False)
 
 # Admin dashboard route
@@ -277,11 +281,26 @@ def submit():
     for soal in Soal.query.all():
         jawaban_siswa = request.form.get(f"jawaban_{soal.id}")
         if jawaban_siswa:
-            # Ubah bobot: 70% sintaksis (Levenshtein), 30% semantik
+            # Bobot baru: 80% semantik, 20% sintaksis
             skor_semantik = hitung_semantik(jawaban_siswa, soal.kunci_jawaban)
             skor_sintaksis = hitung_sintaksis(jawaban_siswa, soal.kunci_jawaban)
-            skor_akhir = (0.8 * skor_sintaksis + 0.2 * skor_semantik) * 100
+            
+            # Hitung skor dengan bobot baru
+            skor_akhir = (0.8 * skor_semantik + 0.2 * skor_sintaksis) * 100
 
+            # Sistem bonus yang lebih manusiawi
+            if 60 <= skor_akhir < 75:  # Rentang yang lebih luas untuk bonus
+                # Bonus bertingkat berdasarkan kedekatan dengan nilai kelulusan
+                if 70 <= skor_akhir < 75:
+                    skor_akhir += 7  # Bonus besar untuk yang hampir lulus
+                elif 65 <= skor_akhir < 70:
+                    skor_akhir += 5  # Bonus menengah
+                else:
+                    skor_akhir += 3  # Bonus kecil untuk usaha yang cukup baik
+
+            # Pastikan tidak melebihi 100
+            skor_akhir = min(100, skor_akhir)
+            
             status = "Lulus" if skor_akhir >= 75 else "Tidak Lulus"
             
             simpan_jawaban = Jawaban(
@@ -320,64 +339,59 @@ def hitung_semantik(jawaban_siswa, jawaban_benar):
 # Fungsi Penilaian Sintaksis
 def hitung_sintaksis(jawaban_siswa, jawaban_benar):
     """
-    Menghitung skor sintaksis menggunakan Levenshtein Distance murni,
-    setelah teks dinormalisasi menggunakan NLP preprocessing.
+    Menghitung skor sintaksis dengan pendekatan yang lebih manusiawi.
     """
-    def preprocess_nlp(text):
-        # 1. Case folding
-        text = text.lower()
-        
-        try:
-            # 2. Tokenisasi kata menggunakan NLTK
-            tokens = word_tokenize(text)
-            
-            # 3. Hapus stopwords
-            stop_words = set(stopwords.words('indonesian'))
-            tokens = [word for word in tokens if word not in stop_words]
-        except LookupError:
-            # Fallback jika NLTK gagal: tokenisasi sederhana
-            print("NLTK resources not found, using simple tokenization")
-            # Hapus tanda baca
-            text = re.sub(r'[^\w\s]', ' ', text)
-            # Tokenisasi sederhana dengan split
-            tokens = text.split()
-            # Stopwords manual untuk bahasa Indonesia
-            stop_words = {'yang', 'di', 'ke', 'dari', 'pada', 'dalam', 'untuk', 'dengan', 'dan', 'atau', 'ini', 'itu', 'juga', 'sudah', 'saya', 'anda', 'dia', 'mereka', 'kita', 'akan', 'bisa', 'ada', 'tidak', 'saat', 'oleh', 'setelah', 'tentang', 'seperti', 'ketika', 'bagi', 'sampai', 'karena', 'jika', 'namun', 'sehingga', 'yaitu', 'yakni', 'daripada', 'adalah'}
-            tokens = [word for word in tokens if word not in stop_words]
-        
-        # 4. Normalisasi kata
-        tokens = [re.sub(r'[^\w\s]', '', word) for word in tokens]
-        
-        # 5. Filter token kosong
-        tokens = [word for word in tokens if word]
-        
-        # 6. Urutkan kata (untuk konsistensi)
-        tokens.sort()
-        
-        # 7. Gabung kembali menjadi kalimat
-        return ' '.join(tokens)
+    # Preprocessing yang lebih baik
+    def preprocess(text):
+        # Lowercase dan hapus spasi berlebih
+        text = text.lower().strip()
+        # Hapus tanda baca kecuali titik
+        text = re.sub(r'[^\w\s\.]', '', text)
+        # Normalisasi spasi
+        text = ' '.join(text.split())
+        return text
 
-    # Preprocessing dengan NLP
-    jawaban_siswa_clean = preprocess_nlp(jawaban_siswa)
-    jawaban_benar_clean = preprocess_nlp(jawaban_benar)
-
-    # Debug print
-    print("\nDetail Penilaian Sintaksis:")
-    print(f"Jawaban setelah preprocessing NLP:")
-    print(f"Kunci   : {jawaban_benar_clean}")
-    print(f"Jawaban : {jawaban_siswa_clean}")
+    # Preprocess input
+    jawaban_siswa = preprocess(jawaban_siswa)
+    jawaban_benar = preprocess(jawaban_benar)
 
     # Hitung Levenshtein distance
-    distance = levenshtein_distance(jawaban_siswa_clean, jawaban_benar_clean)
-    max_length = max(len(jawaban_benar_clean), len(jawaban_siswa_clean))
+    distance = levenshtein_distance(jawaban_siswa, jawaban_benar)
     
-    # Hitung skor (1 - normalized_distance)
-    if max_length == 0:
+    # Hitung skor berbasis kata
+    kata_benar = set(jawaban_benar.split())
+    kata_siswa = set(jawaban_siswa.split())
+    
+    # Hitung kata yang cocok
+    kata_cocok = kata_siswa.intersection(kata_benar)
+    total_kata_unik = len(kata_benar.union(kata_siswa))
+    
+    # Hitung berbagai komponen skor
+    if total_kata_unik == 0:
         return 0.0
         
-    skor = 1 - (distance / max_length)
-    print(f"\nLevenshtein Distance: {distance}")
-    print(f"Max Length: {max_length}")
+    # 1. Skor kecocokan kata (50% dari total)
+    word_match_score = len(kata_cocok) / len(kata_benar) if kata_benar else 0
+    
+    # 2. Skor urutan kata (30% dari total)
+    sequence_score = SequenceMatcher(None, jawaban_siswa, jawaban_benar).ratio()
+    
+    # 3. Skor panjang (20% dari total)
+    length_ratio = min(len(jawaban_siswa), len(jawaban_benar)) / max(len(jawaban_siswa), len(jawaban_benar))
+    
+    # Hitung skor akhir dengan pembobotan
+    skor = (word_match_score * 0.5) + (sequence_score * 0.3) + (length_ratio * 0.2)
+    
+    # Tambahkan bonus untuk jawaban yang sangat mirip
+    if word_match_score > 0.8 and sequence_score > 0.7:
+        skor += 0.1  # Bonus 10% untuk jawaban yang sangat mirip
+    
+    # Debug print
+    print("\nDetail Perhitungan Skor Sintaksis:")
+    print(f"Kata yang Cocok: {len(kata_cocok)} dari {len(kata_benar)}")
+    print(f"Skor Kecocokan Kata: {word_match_score:.2f}")
+    print(f"Skor Urutan: {sequence_score:.2f}")
+    print(f"Skor Panjang: {length_ratio:.2f}")
     print(f"Skor Akhir: {skor:.2f}")
     
     return max(0.0, min(1.0, skor))
