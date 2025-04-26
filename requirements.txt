@@ -1,6 +1,6 @@
 Flask
 Flask-SQLAlchemy
-python-Levenshtein=
+python-Levenshtein
 transformers
 torch
 numpy
